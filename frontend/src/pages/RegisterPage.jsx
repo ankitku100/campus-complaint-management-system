@@ -75,10 +75,14 @@ export const RegisterPage = () => {
     const res = await register(payload);
     setLoading(false);
     
-    if (res.success && !res.awaitingApproval) {
-      navigate('/dashboard');
-    } else if (res.success) {
-      navigate('/login');
+    if (res.success) {
+      if (res.emailVerificationRequired) {
+        navigate('/verify-email', { state: { email: res.email } });
+      } else if (!res.awaitingApproval) {
+        navigate('/dashboard');
+      } else {
+        navigate('/login');
+      }
     } else {
       setError(res.error || 'Registration failed.');
     }

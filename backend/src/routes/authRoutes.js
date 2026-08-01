@@ -11,7 +11,10 @@ const {
   sendOTP,
   verifyOTP,
   resetPassword,
-  updateProfile
+  updateProfile,
+  sendVerificationOTP,
+  verifyEmail,
+  resendVerificationOTP
 } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { validateRequest } = require('../middleware/errorHandler');
@@ -67,5 +70,18 @@ router.post('/reset-password', authLimiter, [
     .matches(/\d/).withMessage('Password must contain at least one number.')
     .matches(/[^a-zA-Z0-9]/).withMessage('Password must contain at least one special character.')
 ], validateRequest, resetPassword);
+
+router.post('/send-verification-otp', authLimiter, [
+  body('email').trim().isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('A valid email is required.')
+], validateRequest, sendVerificationOTP);
+
+router.post('/verify-email', authLimiter, [
+  body('email').trim().isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('A valid email is required.'),
+  body('otp').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits.')
+], validateRequest, verifyEmail);
+
+router.post('/resend-verification-otp', authLimiter, [
+  body('email').trim().isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('A valid email is required.')
+], validateRequest, resendVerificationOTP);
 
 module.exports = router;

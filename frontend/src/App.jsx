@@ -25,6 +25,7 @@ import { VerifyOtpPage } from './pages/VerifyOtpPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { StaffPerformancePage } from './pages/StaffPerformancePage';
 import { StudentManagementPage } from './pages/StudentManagementPage';
+import { EmailVerificationPage } from './pages/EmailVerificationPage';
 
 
 // Route Guard: Authentication Check
@@ -137,6 +138,7 @@ function App() {
           <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
           <Route path="/verify-otp" element={<PublicRoute><VerifyOtpPage /></PublicRoute>} />
           <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+          <Route path="/verify-email" element={<PublicRoute><EmailVerificationPage /></PublicRoute>} />
 
           {/* Secure App Dashboard Portal */}
           <Route

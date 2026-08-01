@@ -620,7 +620,26 @@ const sendStudentEscalationStaffEmail = async (staffEmail, staffName, complaint)
   await sendEmail(staffEmail, title, bodyHtml);
 };
 
+const sendAccountVerificationEmail = async (userEmail, userName, otp) => {
+  const title = "Verify Your CampusCare Account";
+  const bodyHtml = `
+    <p style="margin-top: 0;">Hello <strong>${userName}</strong>,</p>
+    <p>Welcome to CampusCare.</p>
+    <p>Use the verification code below to activate your account:</p>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <span style="display: inline-block; background-color: #111827; border: 1.5px solid #B6FF5C; border-radius: 12px; padding: 12px 30px; font-size: 32px; font-weight: 800; color: #B6FF5C; letter-spacing: 10px; font-family: monospace;">${otp}</span>
+    </div>
+    
+    <p>This OTP expires in <strong>10 minutes</strong>.</p>
+    <p style="font-size: 13px; color: #64748b; margin-top: 25px; border-top: 1px solid #1e293b; padding-top: 15px;">If you did not create this account, please ignore this email.</p>
+    <p>CampusCare Support</p>
+  `;
+  await sendEmail(userEmail, title, bodyHtml);
+};
+
 module.exports = {
+  sendAccountVerificationEmail,
   sendComplaintCreatedEmail,
   sendStaffAssignedEmail,
   sendWorkCompletedEmail,

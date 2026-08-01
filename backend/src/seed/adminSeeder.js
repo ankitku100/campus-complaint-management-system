@@ -29,15 +29,19 @@ const seedAdmin = async () => {
     if (newAdmin) {
       // Clean up duplicate old admin@gmail.com if it exists to prevent duplicate admin accounts
       await User.deleteMany({ role: 'ADMIN', email: 'admin@gmail.com' });
+      newAdmin.isEmailVerified = true;
+      await newAdmin.save();
       console.log(`Admin account exists with new email: ${newAdmin.email}. Cleaned up duplicates.`);
     } else {
       const oldAdmin = admins.find(a => a.email === 'admin@gmail.com');
       if (oldAdmin) {
         oldAdmin.email = 'campuscare.service@gmail.com';
+        oldAdmin.isEmailVerified = true;
         await oldAdmin.save();
         console.log('Migrated default admin email from admin@gmail.com to campuscare.service@gmail.com');
       } else {
         admins[0].email = 'campuscare.service@gmail.com';
+        admins[0].isEmailVerified = true;
         await admins[0].save();
         console.log(`Migrated first admin email to campuscare.service@gmail.com`);
       }
@@ -51,6 +55,7 @@ const seedAdmin = async () => {
       password: await bcrypt.hash(passwordToSeed, 12),
       role: 'ADMIN',
       isVerified: true,
+      isEmailVerified: true,
       mobile: '+91 98765 43210'
     });
     console.log(`Demo admin account seeded: ${emailToSeed}`);
@@ -65,6 +70,7 @@ const seedAdmin = async () => {
       password: await bcrypt.hash('Ankit@100', 12),
       role: 'USER',
       isVerified: true,
+      isEmailVerified: true,
       mobile: '+1 (555) 019-2834'
     });
     console.log('Demo student account seeded (student@test.com / Ankit@100)');
@@ -80,6 +86,7 @@ const seedAdmin = async () => {
       role: 'STAFF',
       category: 'IT Services',
       isVerified: true,
+      isEmailVerified: true,
       mobile: '+1 (555) 018-9876'
     });
     console.log('Demo staff account seeded (staff@test.com / Ankit@100)');
@@ -96,6 +103,7 @@ const seedAdmin = async () => {
         password: await bcrypt.hash('Ankit@100', 12),
         role: 'USER',
         isVerified: true,
+        isEmailVerified: true,
         mobile: '+1 (555) 012-3456'
       });
       console.log(`Default email user account seeded: ${emailUserVal} / Ankit@100`);

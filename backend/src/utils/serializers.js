@@ -8,6 +8,7 @@ const serializeUser = (user) => ({
   role: roleToClient[user.role] || user.role || 'STUDENT',
   apiRole: user.role,
   isVerified: user.isVerified,
+  isEmailVerified: user.isEmailVerified || false,
   avatar: user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}`,
   profilePicture: user.profilePicture || '',
   category: user.category || '',

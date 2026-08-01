@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
     }
   },
   isVerified: { type: Boolean, default: false },
+  isEmailVerified: { type: Boolean, default: false },
+  emailVerificationOTP: { type: String, default: '' },
+  emailVerificationOTPExpires: { type: Date },
+  emailVerifiedAt: { type: Date },
   currentWorkloadScore: { type: Number, default: 0 },
   isDisabled: { type: Boolean, default: false },
   profilePicture: { type: String, default: '' },

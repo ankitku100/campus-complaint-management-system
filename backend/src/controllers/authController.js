@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { serializeUser } = require('../utils/serializers');
-const { sendWelcomeEmail, sendPasswordResetOTPEmail } = require('../services/emailService');
+const { sendWelcomeEmail, sendPasswordResetOTPEmail, sendAccountVerificationEmail } = require('../services/emailService');
 
 const signToken = (user) => jwt.sign(
   { id: user._id.toString() },
@@ -24,8 +24,35 @@ const register = async (req, res) => {
   if (normalizedRole === 'STAFF' && !category) {
     return res.status(400).json({ message: 'Specialization Category is required for staff.' });
   }
-  if (await User.exists({ email: normalizedEmail })) {
-    return res.status(409).json({ message: 'An account with that email already exists.' });
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const existingUser = await User.findOne({ email: normalizedEmail });
+
+  if (existingUser) {
+    if (existingUser.isEmailVerified) {
+      return res.status(409).json({ message: 'An account with that email already exists.' });
+    }
+    
+    // Overwrite details of the existing unverified account to allow re-registration
+    existingUser.name = name;
+    existingUser.password = await bcrypt.hash(password, 12);
+    existingUser.mobile = mobile;
+    existingUser.role = normalizedRole;
+    existingUser.category = normalizedRole === 'STAFF' ? category : undefined;
+    existingUser.isVerified = false;
+    existingUser.emailVerificationOTP = otp;
+    existingUser.emailVerificationOTPExpires = Date.now() + 10 * 60 * 1000;
+    existingUser.otpLastSentAt = new Date();
+    
+    await existingUser.save();
+    await sendAccountVerificationEmail(existingUser.email, existingUser.name, otp);
+    
+    return res.status(201).json({
+      success: true,
+      message: 'Registration updated. Please verify your email address.',
+      email: existingUser.email,
+      emailVerificationRequired: true
+    });
   }
 
   const user = await User.create({
@@ -35,19 +62,21 @@ const register = async (req, res) => {
     mobile,
     role: normalizedRole,
     category: normalizedRole === 'STAFF' ? category : undefined,
-    isVerified: normalizedRole === 'USER'
+    isVerified: false,
+    isEmailVerified: false,
+    emailVerificationOTP: otp,
+    emailVerificationOTPExpires: Date.now() + 10 * 60 * 1000,
+    otpLastSentAt: new Date()
   });
 
-  sendWelcomeEmail(user.email, user.name, user.role);
+  await sendAccountVerificationEmail(user.email, user.name, otp);
 
-  const response = {
-    message: normalizedRole === 'STAFF'
-      ? 'Registration successful. Your account is awaiting admin approval.'
-      : 'Registration successful.',
-    user: serializeUser(user)
-  };
-  if (normalizedRole === 'USER') response.token = signToken(user);
-  res.status(201).json(response);
+  res.status(201).json({
+    success: true,
+    message: 'Registration successful. Please verify your email address.',
+    email: user.email,
+    emailVerificationRequired: true
+  });
 };
 
 const login = async (req, res) => {
@@ -104,14 +133,35 @@ const login = async (req, res) => {
     }
   }
 
-  // Verification check for STAFF role
-  if (user.role === 'STAFF' && !user.isVerified) {
-    console.log('[Login Debug]', {
-      Email: user.email,
-      DatabaseRole: user.role,
-      ValidationResult: 'FAILED - STAFF NOT VERIFIED'
-    });
-    return res.status(403).json({ message: 'Your account is awaiting admin approval.' });
+  // Verification check for Student (USER) and Staff (STAFF) roles
+  if (user.role === 'USER') {
+    if (!user.isEmailVerified) {
+      console.log('[Login Debug]', {
+        Email: user.email,
+        DatabaseRole: user.role,
+        ValidationResult: 'FAILED - USER EMAIL NOT VERIFIED'
+      });
+      return res.status(403).json({ 
+        message: 'Please verify your email before logging in.', 
+        emailVerificationRequired: true,
+        email: user.email
+      });
+    }
+  }
+
+  if (user.role === 'STAFF') {
+    if (!user.isEmailVerified || !user.isVerified) {
+      console.log('[Login Debug]', {
+        Email: user.email,
+        DatabaseRole: user.role,
+        ValidationResult: !user.isEmailVerified ? 'FAILED - STAFF EMAIL NOT VERIFIED' : 'FAILED - STAFF NOT APPROVED BY ADMIN'
+      });
+      return res.status(403).json({ 
+        message: 'Please verify your email and wait for administrator approval.', 
+        emailVerificationRequired: !user.isEmailVerified,
+        email: user.email
+      });
+    }
   }
 
   user.lastLogin = new Date();
@@ -286,6 +336,119 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const sendVerificationOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (user.isEmailVerified) {
+      return res.status(400).json({ success: false, message: 'Email is already verified.' });
+    }
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.emailVerificationOTP = otp;
+    user.emailVerificationOTPExpires = Date.now() + 10 * 60 * 1000;
+    user.otpLastSentAt = new Date();
+    await user.save();
+    
+    await sendAccountVerificationEmail(user.email, user.name, otp);
+    res.json({ success: true, message: 'Verification code sent successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to send verification code.' });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (user.isEmailVerified) {
+      return res.status(400).json({ success: false, message: 'Email is already verified.' });
+    }
+    if (!user.emailVerificationOTP || user.emailVerificationOTP !== otp) {
+      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+    }
+    if (user.emailVerificationOTPExpires && new Date() > new Date(user.emailVerificationOTPExpires)) {
+      return res.status(400).json({ success: false, message: 'Verification code has expired. Please request a new one.' });
+    }
+    
+    // Success
+    user.isEmailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerificationOTP = '';
+    user.emailVerificationOTPExpires = null;
+    
+    if (user.role === 'USER') {
+      user.isVerified = true; // Auto-activate student
+    } else {
+      user.isVerified = false; // Staff awaits admin approval
+    }
+    
+    await user.save();
+    
+    // Send standard welcome email after verification is successful
+    sendWelcomeEmail(user.email, user.name, user.role);
+
+    res.json({
+      success: true,
+      message: user.role === 'STAFF'
+        ? 'Email verified successfully. Your account is now awaiting administrator approval.'
+        : 'Email verified successfully. You can now log in.',
+      user: serializeUser(user)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Verification failed.' });
+  }
+};
+
+const resendVerificationOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (user.isEmailVerified) {
+      return res.status(400).json({ success: false, message: 'Email is already verified.' });
+    }
+    
+    if (user.otpLastSentAt && Date.now() - new Date(user.otpLastSentAt).getTime() < 60 * 1000) {
+      return res.status(429).json({
+        success: false,
+        message: 'Please wait 60 seconds before requesting another verification code.'
+      });
+    }
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.emailVerificationOTP = otp;
+    user.emailVerificationOTPExpires = Date.now() + 10 * 60 * 1000;
+    user.otpLastSentAt = new Date();
+    await user.save();
+    
+    await sendAccountVerificationEmail(user.email, user.name, otp);
+    res.json({ success: true, message: 'Verification code resent successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to resend verification code.' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -295,5 +458,8 @@ module.exports = {
   sendOTP,
   verifyOTP,
   resetPassword,
-  updateProfile
+  updateProfile,
+  sendVerificationOTP,
+  verifyEmail,
+  resendVerificationOTP
 };

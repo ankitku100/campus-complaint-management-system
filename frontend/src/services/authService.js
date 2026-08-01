@@ -10,3 +10,7 @@ export const updateProfileRequest = async (userData) => (await api.put('/auth/pr
 export const sendOtpRequest = async (email) => (await api.post('/auth/send-otp', { email })).data;
 export const verifyOtpRequest = async (email, otp) => (await api.post('/auth/verify-otp', { email, otp })).data;
 export const resetPasswordRequest = async (email, otp, password) => (await api.post('/auth/reset-password', { email, otp, password })).data;
+
+export const sendVerificationOtpRequest = async (email) => (await api.post('/auth/send-verification-otp', { email })).data;
+export const verifyEmailRequest = async (email, otp) => (await api.post('/auth/verify-email', { email, otp })).data;
+export const resendVerificationOtpRequest = async (email) => (await api.post('/auth/resend-verification-otp', { email })).data;

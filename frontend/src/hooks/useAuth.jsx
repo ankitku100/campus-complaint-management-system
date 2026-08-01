@@ -105,13 +105,23 @@ export const AuthProvider = ({ children }) => {
       await refreshData(data.user);
       return { success: true, role: data.user.role };
     } catch (error) {
-      return { success: false, error: getErrorMessage(error) };
+      const isVerificationRequired = error.response?.data?.emailVerificationRequired;
+      const verifiedEmail = error.response?.data?.email || email;
+      return { 
+        success: false, 
+        error: getErrorMessage(error), 
+        emailVerificationRequired: isVerificationRequired, 
+        email: verifiedEmail 
+      };
     }
   };
 
   const register = async (userData) => {
     try {
       const data = await registerRequest({ ...userData, role: userData.role || 'USER' });
+      if (data.emailVerificationRequired) {
+        return { success: true, emailVerificationRequired: true, email: data.email, message: data.message };
+      }
       if (!data.token) return { success: true, awaitingApproval: true, message: data.message };
       sessionStorage.setItem('campuscare_token', data.token);
       storeUser(data.user);

@@ -30,7 +30,11 @@ export const LoginPage = () => {
     if (res.success) {
       navigate('/dashboard');
     } else {
-      setError(res.error || 'Invalid credentials.');
+      if (res.emailVerificationRequired) {
+        navigate('/verify-email', { state: { email: res.email } });
+      } else {
+        setError(res.error || 'Invalid credentials.');
+      }
     }
   };
 
